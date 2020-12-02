@@ -12,7 +12,7 @@ document.getElementById("signUpForm").addEventListener("submit",async (e)=>{
         password:e.target.password.value
     }
 
-const req = await fetch(serverURL+"register",{method:"POST",headers: {
+const req = await fetch("/register",{method:"POST",headers: {
     'Content-Type': 'application/json'
     // 'Content-Type': 'application/x-www-form-urlencoded',
   },body:JSON.stringify(body)})
