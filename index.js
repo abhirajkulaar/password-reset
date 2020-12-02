@@ -77,7 +77,7 @@ app.use(cors({
 
 
     MongoClient.connect(url, function(err, db) {
-        if (err) return;
+      if(err){res.status(400).json({status:"fail",reason:"Unable to connect to DB"});return;}
         var dbo = db.db("pwReset");
         dbo.collection("loginData").find({usermail:req.body.usermail}).toArray(
             (err,result)=>{
