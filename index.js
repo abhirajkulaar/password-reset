@@ -19,7 +19,7 @@ app.use(cors({
   origin: true,
   credentials: true
 }))
-//.use(cookieParser())
+.use(cookieParser())
 .use(function(req, res, next) {
     res.header("Access-Control-Allow-Origin", "*"); // update to match the domain you will make the request from
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
@@ -92,7 +92,7 @@ app.use(cors({
                     jwt.sign({ usermail: req.body.usermail}, jwtKey, function(err, token) {
                         if(err){res.status(400).json({status:"fail",reason:"Unable to generate jwt token"});throw err;return;}
                         console.log(token);
-                        res.cookie('jwt',token, { httpOnly: true, secure: true, maxAge: 3600000,sameSite: "Lax" }).json({status:"success"})
+                        res.cookie('jwt',token, { httpOnly: true, secure: false, maxAge: 3600000,sameSite: "Lax" }).json({status:"success"})
                       });
 
 
@@ -113,7 +113,7 @@ app.use(cors({
 
 })
 
-
+app.use('/public', express.static('public'))
 // .use(
 
 
