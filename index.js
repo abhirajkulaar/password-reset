@@ -15,10 +15,10 @@ const jwtKey="mytestkey"
 
 app
 .use(bodyParser.json())
-app.use(cors({
-  origin: true,
-  credentials: true
-}))
+// app.use(cors({
+//   origin: true,
+//   credentials: true
+// }))
 .use(cookieParser())
 .use(function(req, res, next) {
     res.header("Access-Control-Allow-Origin", "*"); // update to match the domain you will make the request from
