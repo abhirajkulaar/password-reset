@@ -1,4 +1,6 @@
-const serverURL = "https://password-reset1.herokuapp.com/"
+const serverURL = "http://localhost:5000/"
+//const serverURL = "https://password-reset1.herokuapp.com/"
+
 
 document.getElementById("signUpForm").addEventListener("submit",async (e)=>{
     e.preventDefault()
@@ -19,7 +21,7 @@ const req = await fetch(serverURL+"register",{method:"POST",headers: {
 debugger
 
 
-if(req.status==200){window.location.href="/login";
+if(req.status==200){//window.location.href="/login.html";
 }
 else{
 const json = await req.json();

@@ -4,16 +4,20 @@ const jwt = require("jsonwebtoken");
 const fs = require('fs');
 const bcrypt = require('bcrypt');
 var cookieParser = require('cookie-parser')
+const nodemailer = require("nodemailer");
+var randomize = require('randomatic');
 var cors = require('cors')
+const sendmail = require('sendmail')();
 const saltRounds = 10;
 const app = express();
 var MongoClient = require('mongodb').MongoClient;
-var url = "mongodb+srv://ask:ask@password-reset.vnin7.mongodb.net/pwReset?retryWrites=true&w=majority";
-const jwtKey="mytestkey"
-
+var url = process.env.mongoURL;
+const jwtKey=process.env.jwtKey
+const gmailPass= process.env.gmailPass
 
 
 app
+app.use('/public', express.static('public'))
 .use(bodyParser.json())
 // app.use(cors({
 //   origin: true,
@@ -113,250 +117,168 @@ app
 
 })
 
-app.use('/public', express.static('public'))
-// .use(
-
-
-
-//     (req,res)=> { 
-        
-//         if(!req.cookies.jwt){ return res.redirect('/Login');}
-//         jwt.verify(req.cookies.jwt, jwtKey, { algorithm: 'RS256'},(err,decoded)=>{
-//             if(err){ return res.redirect('/Login');}
-//             if(!decoded.usermail){return res.redirect('/Login');}
-//             req.usermail=decoded.usermail;
-//             next();
-//         })
-
-        
-//        }
-
-
-// )
-
-
-
-
-.get('/students/:studentName',(req,res)=>
-{
-
-    MongoClient.connect(url, function(err, db) {
-        if (err) return;
-        var dbo = db.db("student-mentor");
-       query = {name:req.params.studentName}
-        dbo.collection("students").find(query).toArray(function(err, result) {
-          
-          if(err){res.status(400).json({status:"fail"});return;}
-        else{res.json(result[0])}
-
-          db.close();
-        });
-      });
-})
-
-
-.get('/mentors',(req,res)=>
-{
-
-    MongoClient.connect(url, function(err, db) {
-        if (err) return;
-        var dbo = db.db("student-mentor");
-       
-        dbo.collection("mentors").find().toArray(function(err, result) {
-          
-          if(err){res.status(400).json({status:"fail"});return;}
-        else{res.json(result)}
-
-          db.close();
-        });
-      });
-
+.get("/logout",(req,res)=>{
+  res.clearCookie('jwt');
+  res.redirect('/login');
 
 })
 
 
-.post("/students",(req,res)=>{
-    console.log(typeof req.body.name !="string"||typeof req.body.age !="number"||typeof req.body.batch !="number"||typeof req.body.contact !="number"||typeof req.body.email !="string")
-    if(typeof req.body.name !="string"||typeof req.body.age !="number"||typeof req.body.batch !="number"||typeof req.body.contact !="number"||typeof req.body.email !="string")
-    {res.status(400).json({status:"fail",reason:"request body invalid"});return;}
+.use((req,res,next)=>{
+  if(!req.cookies.jwt){next();return;}
 
-    
+  
+  jwt.verify(req.cookies.jwt, jwtKey, function(err, decoded) {
+    if(err||!decoded){next();}
     else{
-        MongoClient.connect(url, function(err, db) {
-            if (err) return;
-            var dbo = db.db("student-mentor");
-           query={name:req.body.name}
-            dbo.collection("students").find(query).toArray(function(err, result) {
+    console.log(decoded)
+    req.usermail=decoded.usermail;
+    next();}
+  })
+
+
+
+})
+.get("/userDetails",(req,res)=>{
+  if(!req.usermail){{res.status(400).json({status:"fail",reason:"Unautorized!"});return;}}
+
+  MongoClient.connect(url, function(err, db) {
+    if(err){res.status(400).json({status:"fail",reason:"Unable to connect to DB"});return;}
+      var dbo = db.db("pwReset");
+      dbo.collection("loginData").find({usermail:req.usermail}).toArray(
+          (err,result)=>{
+              if(err){res.status(400).json({status:"fail",reason:"Unable to connect to DB"});return;}
+              if(result.length==0){{res.status(400).json({status:"fail",reason:"User does not exist pls register"});return;}}
+              res.json(result[0])
+
               
-              if(err){res.status(400).json({status:"fail"});return;}
-              if(result.length>0){res.status(400).json({status:"fail",reason:"user already exists"});return;}
-
-
-            dbo.collection("students").insertOne({name:req.body.name,age:req.body.age,batch:req.body.batch,contact:req.body.contact,email:req.body.email,mentor_name:""},(err,result)=>{
-                if(err){res.status(400).json({status:"fail"});return;}
-                else{res.json({status:"success"})}
-            })
-    
-              db.close();
-            });
-          });
-    }
-})
-
-
-
-.post("/mentors",(req,res)=>{
-    if(typeof req.body.name !="string"||typeof req.body.age !="number"||typeof req.body.contact !="number"||typeof req.body.email !="string")
-    {res.status(400).json({status:"fail",reason:"request body invalid"});return;}
-
-    
-
-    MongoClient.connect(url, function(err, db) {
-        if (err) return;
-        var dbo = db.db("student-mentor");
-       query={name:req.body.name}
-        dbo.collection("mentors").find(query).toArray(function(err, result) {
-          
-          if(err){res.status(400).json({status:"fail"});return;}
-          if(result.length>0){res.status(400).json({status:"fail",reason:"user already exists"});return;}
-
-
-        dbo.collection("mentors").insertOne({name:req.body.name,age:req.body.age,contact:req.body.contact,email:req.body.email,students:[]},(err,result)=>{
-            if(err){res.status(400).json({status:"fail"});return;}
-            else{res.json({status:"success"})}
-        })
-
-          db.close();
-        });
-      });
-
-})
-
-
-
-.post("/assignMentor",(req,res)=>{
-    if(typeof req.body.student_name !="string"||typeof req.body.mentor_name !="string")
-    {res.json({status:"fail",reason:"request body invalid"});return;}
-
-    
-
-    MongoClient.connect(url, function(err, db) {
-        if (err) return;
-        var dbo = db.db("student-mentor");
-       
-        dbo.collection("mentors").find({name:req.body.mentor_name}).toArray(function(err, result) {
-          
-          if(err){res.status(400).json({status:"fail"});return;}
-          if(result.length==0){res.status(400).json({status:"fail",reason:"mentor does not exist"});return;}
-
-          dbo.collection("students").find({name:req.body.student_name}).toArray(function(err, result) {
-            if(err){res.status(400).json({status:"fail"});return;}
-            if(result.length==0){res.status(400).json({status:"fail",reason:"student does not exist"});return;}
-
-            dbo.collection("students").updateOne({name:req.body.student_name},{$set:{mentor_name:req.body.mentor_name}},(err,result)=>{
-                if(err){res.status(400).json({status:"fail"});return;}
-
-            dbo.collection("mentors").updateOne({name:req.body.mentor_name},{$push:{students:req.body.student_name}},(err,result)=>{
-                if(err){res.status(400).json({status:"fail"});return;}
-                res.json({status:"Success"})
-                db.close()
-            })
-
-            })
-
-
-
-          })
-            
-
-          
-        });
-      });
-
-})
-
-.post("/removeMentor",(req,res)=>{
-    if(typeof req.body.student_name !="string")
-    {res.json({status:"fail",reason:"request body invalid"});return;}
-
-    
-
-    MongoClient.connect(url, function(err, db) {
-        if (err) return;
-        var dbo = db.db("student-mentor");
-       
+          }
+      )
      
 
-          dbo.collection("students").find({name:req.body.student_name}).toArray(function(err, result) {
-            if(err){res.status(400).json({status:"fail"});return;}
-            if(result.length==0){res.status(400).json({status:"fail",reason:"student does not exist"});return;}
-
-            dbo.collection("students").updateOne({name:req.body.student_name},{$set:{mentor_name:""}},(err,result)=>{
-                if(err){res.status(400).json({status:"fail"});return;}
-
-            dbo.collection("mentors").updateOne({students:req.body.student_name},{$pull:{students:req.body.student_name}},(err,result)=>{
-                if(err){res.status(400).json({status:"fail"});return;}
-                res.json({status:"Success"})
-                db.close()
-            })
-
-            })
-
-
-
-          
-            
-
-          
-        });
-      });
-
+    });
 
 
 })
 
-.post("/removeMentor",(req,res)=>{
-    if(typeof req.body.student_name !="string")
-    {res.json({status:"fail",reason:"request body invalid"});return;}
 
-    
+.get("/login",(req,res)=>{
 
-        fs.readFile("students.json",(err,data)=>{
-    
-            if(err){res.json({status:"fail"});return;}
-            else{
-                data=JSON.parse(data);
+  if(req.usermail){ res.redirect('/landing');return;}
 
-                if(!data.some((e)=>e.name==req.body.student_name)){res.status(400).json({status:"fail",reason:"user does not exist"});return;}
+  res.sendFile(__dirname + '/public/index.html');
+})
 
-                fs.readFile("mentors.json",(err,data2)=>{if(err){res.status(400).json({status:"fail",reason:"unable to read mentors file"})}else{
-                    
-                    mentorData=JSON.parse(data2);
-                    if(true){
+.get("/register",(req,res)=>{
 
-                        if(mentorData.some((e)=>e.students.includes(req.body.student_name))){mentorData.find((e)=>e.students.includes(req.body.student_name)).students.remove(req.body.student_name)}
+  if(req.usermail){ res.redirect('/landing');return;}
 
-                        
-                       
-                        fs.writeFile("mentors.json",JSON.stringify(mentorData),(err)=>{
-                            
-                            if(err){res.status(400).json({status:"fail",reason:"unable to write mentors file"});return}
-                            data.find((e)=>e.name==req.body.student_name).mentor_name="";
+  res.sendFile(__dirname + '/public/register.html');
+})
 
-                
-                            fs.writeFile("students.json",JSON.stringify(data),(err)=>{res.json(data)})
-                            })
+.get("/",(req,res)=>{
 
+  if(req.usermail){ res.sendFile(__dirname + '/public/landing.html');;return;}
 
-                }}})
+  res.redirect('/login')
+})
+.get("/landing",(req,res)=>{
+
+  if(req.usermail){ res.sendFile(__dirname + '/public/landing.html');;return;}
+
+  res.redirect('/login')
+})
+
+.get("/forgotPass",(req,res)=>{
+  if(req.usermail){ res.redirect("landing");return;}
+
+  res.sendFile(__dirname + '/public/passReset.html');
 
 
-            
-            }
-    
+})
+
+
+
+.post("/forgotPasswordRequest", (req,res)=>{
+
+  if(!req.body.usermail){{res.status(400).json({status:"fail",reason:"Unautorized!"});return;}}
+  else{
+
+    MongoClient.connect(url, function(err, db) {
+      if(err){res.status(400).json({status:"fail",reason:"Unable to connect to DB"});return;}
+        var dbo = db.db("pwReset");
+        dbo.collection("loginData").find({usermail:req.body.usermail}).toArray(async (err,result)=>{
+          if(err){{res.status(400).json({status:"fail",reason:"Unable to query DB"});return;}}
+          if(result.length==0){{res.status(400).json({status:"fail",reason:"User not found"});return;}}
+          const resetCode=randomize('0', 6);
+       
+
+          // create reusable transporter object using the default SMTP transport
+          let transporter = nodemailer.createTransport({
+            service: "gmail",
+            auth: {
+              user: "abhirajkulaar@gmail.com", // generated ethereal user
+              pass: gmailPass, // generated ethereal password
+            },
+          });
+
+          let info = await transporter.sendMail({
+            from: 'abhirajkulaar@gmail.com', // sender address
+            to: req.body.usermail, // list of receivers
+            subject: "Password Reset Code", // Subject line
+            text: "Your Password Reset Code is: "+ resetCode, // plain text body
+           // html: "<b>Hello world?</b>", // html body
+          });
+          
+          const expAt =new Date() 
+          expAt.setHours(expAt.getHours()+1)
+          dbo.collection("loginData").updateOne({usermail:req.body.usermail}, {$set:{resetCode:resetCode,expAt:expAt}}, function(err, result) {
+            if(err){res.status(400).json({status:"fail",reason:"Unable to update code to DB"});return;}
+            res.json({status:"success"})
+
+          })
+          
+
         })
+    }
 
-})
+
+)}})
+
+
+.post("/forgotPasswordReset", (req,res)=>{
+
+  if(!req.body.usermail||!req.body.resetCode){{res.status(400).json({status:"fail",reason:"Unautorized!"});return;}}
+  else{
+
+    MongoClient.connect(url, function(err, db) {
+      if(err){res.status(400).json({status:"fail",reason:"Unable to connect to DB"});return;}
+        var dbo = db.db("pwReset");
+        dbo.collection("loginData").find({usermail:req.body.usermail}).toArray(async (err,result)=>{
+          if(err){{res.status(400).json({status:"fail",reason:"Unable to query DB"});return;}}
+          if(result.length==0||!result[0].resetCode){{res.status(400).json({status:"fail",reason:"User not found/No reset code sent"});return;}}
+          if(result[0].resetCode!=req.body.resetCode){{res.status(400).json({status:"fail",reason:"Wrong reset code!"});return;}}
+          let nowDate=new Date()
+          let expDate= new Date(result[0].expAt)
+          if(nowDate.getTime()>expDate.getTime()){{res.status(400).json({status:"fail",reason:"Code expired! Please generate again"});return;}}
+       
+
+          // create reusable transporter object using the default SMTP transport
+          bcrypt.hash(req.body.password, saltRounds, function(err, hash)
+          {
+          
+          dbo.collection("loginData").updateOne({usermail:req.body.usermail}, {$set:{password:hash}}, function(err, result) {
+            if(err){res.status(400).json({status:"fail",reason:"Unable to update password to DB"});return;}
+            res.json({status:"success"})
+
+          })
+          
+        })
+        })
+    }
+
+
+)}})
 
 
 
